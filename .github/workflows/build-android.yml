@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - 'README.md'
       - '.gitignore'
+      - '**.md'
   workflow_dispatch:
 
 jobs:
@@ -56,80 +57,53 @@ jobs:
             github.com/b3nni/drn/core/drnbind
 
       # ── Flutter Project ─────────────────────────────────────────
-      - name: Generate Flutter base project
+      - name: Generate Flutter project
         run: |
           cd /tmp
           flutter create --org com.drn --project-name drn_app --platforms android temp_drn
-          # Copy Android project files (build.gradle, etc.)
+          # Keep the generated Android project but overlay our files
           cp -r temp_drn/android/* ${{ github.workspace }}/flutter_app/android/
           cp temp_drn/analysis_options.yaml ${{ github.workspace }}/flutter_app/
-          # Copy our custom dart code
-          cp -r ${{ github.workspace }}/flutter_app/lib/* temp_drn/lib/
-          cp -r temp_drn/lib/* ${{ github.workspace }}/flutter_app/lib/
-
-      - name: Get Flutter packages
-        run: cd flutter_app && flutter pub get
-
-      # The aar was already placed in android/app/libs/drn.aar
-      - name: Add aar dependency to android/app/build.gradle
-        run: |
-          echo "" >> flutter_app/android/app/build.gradle
-          echo "dependencies {" >> flutter_app/android/app/build.gradle
-          echo "    implementation files('libs/drn.aar')" >> flutter_app/android/app/build.gradle
-          echo "}" >> flutter_app/android/app/build.gradle
-
-      # ── Signing ─────────────────────────────────────────────────
-      - name: Create keystore for signing
-        run: |
-          keytool -genkey -v -keystore release.jks \
-            -alias drn -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass drnpass -keypass drnpass \
-            -dname "CN=Dr.N, OU=Dev, O=B3nni, L=BS, ST=NI, C=DE"
-
-      - name: Create key.properties
-        run: |
-          cat > flutter_app/android/key.properties << EOF
-          storePassword=drnpass
-          keyPassword=drnpass
-          keyAlias=drn
-          storeFile=../release.jks
-          EOF
-
-      - name: Configure signing in build.gradle
-        run: |
-          cat >> flutter_app/android/app/build.gradle << 'SIGNEOF'
-
-          def keystoreProperties = new Properties()
-          def keystorePropertiesFile = rootProject.file('key.properties')
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-          }
+          # Remove generated MainActivity (we have our own with bridge)
+          rm -f ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/MainActivity.kt
+          # Make sure our custom Kotlin files directory exists
+          mkdir -p ${{ github.workspace }}/flutter_app/android/app/src/main/java/com/drn/app
+          # Add aar dependency to generated build.gradle
+          cat >> ${{ github.workspace }}/flutter_app/android/app/build.gradle << 'DEOF'
 
           android {
-              signingConfigs {
-                  release {
-                      keyAlias keystoreProperties['keyAlias']
-                      keyPassword keystoreProperties['keyPassword']
-                      storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-                      storePassword keystoreProperties['storePassword']
-                  }
-              }
               buildTypes {
                   release {
-                      signingConfig signingConfigs.release
+                      debuggable false
                   }
               }
           }
-          SIGNEOF
+
+          dependencies {
+              implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
+          }
+          DEOF
+
+      - name: Get Flutter packages
+        working-directory: flutter_app
+        run: flutter pub get
 
       # ── Build ───────────────────────────────────────────────────
-      - name: Build Android APK (release)
-        run: cd flutter_app && flutter build apk --release
+      - name: Build Android APK (debug)
+        working-directory: flutter_app
+        run: flutter build apk --debug
 
       - name: Rename APK
         run: |
-          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
+          cp flutter_app/build/app/outputs/flutter-apk/app-debug.apk \
              Dr.N-v1.0.0-android.apk
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dr.N-Android-APK
+          path: Dr.N-v1.0.0-android.apk
+          if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -140,10 +114,3 @@ jobs:
           files: Dr.N-v1.0.0-android.apk
           generate_release_notes: false
           make_latest: false
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dr.N-Android-signed-APK
-          path: Dr.N-v1.0.0-android.apk
-          if-no-files-found: error

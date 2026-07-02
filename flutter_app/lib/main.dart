@@ -23,10 +23,10 @@ class DrNApp extends StatelessWidget {
           backgroundColor: Color(0xFF1A1A2E),
         ),
         scaffoldBackgroundColor: const Color(0xFF0F0F1A),
-        cardTheme: const CardThemeData(
-          color: Color(0xFF1A1A2E),
+        cardTheme: CardTheme(
+          color: const Color(0xFF1A1A2E),
           elevation: 4,
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         ),
       ),
       home: const HomeScreen(),
