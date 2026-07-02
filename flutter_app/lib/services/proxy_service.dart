@@ -1,39 +1,67 @@
+// ProxyService with local server storage + Go backend for proxy only
 import 'package:flutter/services.dart';
 
-/// ProxyService communicates with the native Go proxy via MethodChannel.
 class ProxyService {
   static const MethodChannel _channel = MethodChannel('drn.app/proxy');
 
-  Future<String> getServers() async {
-    final result = await _channel.invokeMethod<String>('getServers');
-    return result ?? '[]';
+  // --- Local server storage (no Go backend needed) ---
+  final List<Map<String, String>> _servers = [];
+  int _nextId = 1;
+
+  List<Map<String, String>> getServers() {
+    return List.from(_servers);
   }
 
-  Future<String> getStatus() async {
-    final result = await _channel.invokeMethod<String>('getStatus');
-    return result ?? '{"running":false}';
-  }
-
-  Future<void> addServer(String name, String address, String port) async {
-    await _channel.invokeMethod('addServer', {
+  void addServer(String name, String address, String port) {
+    _servers.add({
+      'id': 'srv_${_nextId++}',
       'name': name,
       'address': address,
       'port': port,
     });
   }
 
-  Future<void> removeServer(String id) async {
-    await _channel.invokeMethod('removeServer', {'id': id});
+  void removeServer(String id) {
+    _servers.removeWhere((s) => s['id'] == id);
+  }
+
+  // --- Go backend for proxy only ---
+  Future<bool> isRunning() async {
+    try {
+      final json = await _channel.invokeMethod<String>('getStatus');
+      if (json == null) return false;
+      // Parse JSON with dart:convert
+      return json.contains('"running":true');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String> getStatus() async {
+    try {
+      final result = await _channel.invokeMethod<String>('getStatus');
+      return result ?? '{"running":false}';
+    } catch (_) {
+      return '{"running":false,"error":"bridge not available"}';
+    }
   }
 
   Future<void> startProxy(String address, String port) async {
-    await _channel.invokeMethod('startProxy', {
-      'address': address,
-      'port': port,
-    });
+    try {
+      await _channel.invokeMethod('startProxy', {
+        'address': address,
+        'port': port,
+      });
+    } catch (e) {
+      throw Exception('Proxy start failed: $e');
+    }
   }
 
   Future<void> stopProxy() async {
-    await _channel.invokeMethod('stopProxy');
+    try {
+      await _channel.invokeMethod('stopProxy');
+    } catch (e) {
+      throw Exception('Proxy stop failed: $e');
+    }
   }
 }
