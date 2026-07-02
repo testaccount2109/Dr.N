@@ -61,16 +61,18 @@ jobs:
         run: |
           cd /tmp
           flutter create --org com.drn --project-name drn_app --platforms android temp_drn
-          # Keep the generated Android project but overlay our files
-          cp -r temp_drn/android/* ${{ github.workspace }}/flutter_app/android/
+          # Backup our custom bridge files
+          mkdir -p /tmp/drn_bridge
+          cp -r ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/*.kt \
+                /tmp/drn_bridge/ 2>/dev/null || true
+          # Replace android/ with generated version
+          rm -rf ${{ github.workspace }}/flutter_app/android/
+          cp -r temp_drn/android ${{ github.workspace }}/flutter_app/android
           cp temp_drn/analysis_options.yaml ${{ github.workspace }}/flutter_app/
-          # Copy our custom MainActivity with bridge into the generated project
-          cp ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/MainActivity.kt \
-             temp_drn/android/app/src/main/kotlin/com/drn/app/MainActivity.kt
-          cp ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/ProxyBridge.kt \
-             temp_drn/android/app/src/main/kotlin/com/drn/app/ProxyBridge.kt
-          # Now re-copy (overwrites generated files with our custom ones)
-          cp -r temp_drn/android/* ${{ github.workspace }}/flutter_app/android/
+          # Restore our custom bridge files
+          mkdir -p ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app
+          cp /tmp/drn_bridge/*.kt \
+             ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/ 2>/dev/null || true
           # Add aar dependency to generated build.gradle
           cat >> ${{ github.workspace }}/flutter_app/android/app/build.gradle << 'DEOF'
 
