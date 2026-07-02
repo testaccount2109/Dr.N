@@ -64,10 +64,13 @@ jobs:
           # Keep the generated Android project but overlay our files
           cp -r temp_drn/android/* ${{ github.workspace }}/flutter_app/android/
           cp temp_drn/analysis_options.yaml ${{ github.workspace }}/flutter_app/
-          # Remove generated MainActivity (we have our own with bridge)
-          rm -f ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/MainActivity.kt
-          # Make sure our custom Kotlin files directory exists
-          mkdir -p ${{ github.workspace }}/flutter_app/android/app/src/main/java/com/drn/app
+          # Copy our custom MainActivity with bridge into the generated project
+          cp ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/MainActivity.kt \
+             temp_drn/android/app/src/main/kotlin/com/drn/app/MainActivity.kt
+          cp ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/ProxyBridge.kt \
+             temp_drn/android/app/src/main/kotlin/com/drn/app/ProxyBridge.kt
+          # Now re-copy (overwrites generated files with our custom ones)
+          cp -r temp_drn/android/* ${{ github.workspace }}/flutter_app/android/
           # Add aar dependency to generated build.gradle
           cat >> ${{ github.workspace }}/flutter_app/android/app/build.gradle << 'DEOF'
 
