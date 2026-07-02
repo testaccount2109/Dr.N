@@ -61,24 +61,42 @@ jobs:
         run: |
           cd /tmp
           flutter create --org com.drn --project-name drn_app --platforms android temp_drn
-          # Backup our custom bridge files and aar
-          mkdir -p /tmp/drn_bridge
-          cp -r ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/*.kt \
-                /tmp/drn_bridge/ 2>/dev/null || true
-          cp ${{ github.workspace }}/flutter_app/android/app/libs/drn.aar \
-             /tmp/drn_bridge/drn.aar 2>/dev/null || true
-          # Replace android/ with generated version
-          rm -rf ${{ github.workspace }}/flutter_app/android/
-          cp -r temp_drn/android ${{ github.workspace }}/flutter_app/android
-          cp temp_drn/analysis_options.yaml ${{ github.workspace }}/flutter_app/
-          # Restore our custom bridge files
-          mkdir -p ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app
-          cp /tmp/drn_bridge/*.kt \
-             ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/ 2>/dev/null || true
-          # Restore the Go library aar (was placed before flutter create)
-          mkdir -p ${{ github.workspace }}/flutter_app/android/app/libs
-          cp /tmp/drn_bridge/drn.aar \
-             ${{ github.workspace }}/flutter_app/android/app/libs/drn.aar 2>/dev/null || true
+          # Save our custom files before replacing android/
+          OUR_KT="${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app"
+          OUR_LIBS="${{ github.workspace }}/flutter_app/android/app/libs"
+          # Copy our custom .kt files to temp
+          mkdir -p /tmp/drn_kt
+          if [ -d "$OUR_KT" ]; then
+            cp -v "$OUR_KT"/*.kt /tmp/drn_kt/ 2>/dev/null || echo "No .kt files to backup"
+          fi
+          # Copy drn.aar to temp
+          mkdir -p /tmp/drn_libs
+          if [ -f "$OUR_LIBS/drn.aar" ]; then
+            cp -v "$OUR_LIBS/drn.aar" /tmp/drn_libs/
+          else
+            echo "WARNING: drn.aar not found at $OUR_LIBS/drn.aar"
+          fi
+          # Now replace android/ with generated version
+          rm -rf "${{ github.workspace }}/flutter_app/android/"
+          cp -r temp_drn/android "${{ github.workspace }}/flutter_app/android"
+          cp temp_drn/analysis_options.yaml "${{ github.workspace }}/flutter_app/"
+          # Restore our custom .kt files
+          mkdir -p "$OUR_KT"
+          if ls /tmp/drn_kt/*.kt 1>/dev/null 2>&1; then
+            cp -v /tmp/drn_kt/*.kt "$OUR_KT/"
+            echo "Restored .kt files: $(ls $OUR_KT/*.kt)"
+          else
+            echo "ERROR: No backup .kt files found to restore!"
+            ls -la /tmp/drn_kt/ || true
+          fi
+          # Restore drn.aar
+          mkdir -p "$OUR_LIBS"
+          if [ -f /tmp/drn_libs/drn.aar ]; then
+            cp -v /tmp/drn_libs/drn.aar "$OUR_LIBS/"
+            echo "Restored drn.aar ($(ls -lh $OUR_LIBS/drn.aar | awk '{print $5}'))"
+          else
+            echo "ERROR: drn.aar backup not found!"
+          fi
           # Add aar dependency to generated build.gradle
           cat >> ${{ github.workspace }}/flutter_app/android/app/build.gradle << 'DEOF'
 

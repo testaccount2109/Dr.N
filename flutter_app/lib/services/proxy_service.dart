@@ -53,6 +53,12 @@ class ProxyService {
         'port': port,
       });
     } catch (e) {
+      // If bridge fails, try with a simple success (server might still start later)
+      if (e.toString().contains('BACKEND_UNAVAILABLE') || 
+          e.toString().contains('MissingPluginException')) {
+        // Go backend not loaded - proxy won't work
+        rethrow;
+      }
       throw Exception('Proxy start failed: $e');
     }
   }
