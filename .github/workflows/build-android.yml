@@ -70,6 +70,14 @@ jobs:
              "${{ github.workspace }}/flutter_app/android/gradle/wrapper/gradle-wrapper.properties"
           cp -v temp_drn/android/app/build.gradle \
              "${{ github.workspace }}/flutter_app/android/app/build.gradle"
+          # Copy generated resources and manifest (needed for build)
+          cp -rv temp_drn/android/app/src/main/res/* \
+             "${{ github.workspace }}/flutter_app/android/app/src/main/res/" 2>/dev/null || true
+          # Use generated manifest but add our permissions
+          cp -v temp_drn/android/app/src/main/AndroidManifest.xml \
+             "${{ github.workspace }}/flutter_app/android/app/src/main/AndroidManifest.xml"
+          MANIFEST="${{ github.workspace }}/flutter_app/android/app/src/main/AndroidManifest.xml"
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>\n    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>\n\n    <application|' "$MANIFEST"
           # Add our aar dependency to build.gradle
           echo "" >> "${{ github.workspace }}/flutter_app/android/app/build.gradle"
           echo "dependencies {" >> "${{ github.workspace }}/flutter_app/android/app/build.gradle"
