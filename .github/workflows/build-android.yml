@@ -60,11 +60,10 @@ jobs:
         run: |
           cd /tmp
           flutter create --org com.drn --project-name drn_app --platforms android temp_drn
+          # Copy Android project files (build.gradle, etc.)
           cp -r temp_drn/android/* ${{ github.workspace }}/flutter_app/android/
-          cp -r temp_drn/ios/* ${{ github.workspace }}/flutter_app/ios/
-          cp -r temp_drn/test ${{ github.workspace }}/flutter_app/
           cp temp_drn/analysis_options.yaml ${{ github.workspace }}/flutter_app/
-          # Copy our custom dart code over the generated main.dart
+          # Copy our custom dart code
           cp -r ${{ github.workspace }}/flutter_app/lib/* temp_drn/lib/
           cp -r temp_drn/lib/* ${{ github.workspace }}/flutter_app/lib/
 
