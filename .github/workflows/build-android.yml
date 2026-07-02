@@ -71,8 +71,9 @@ jobs:
           cp -v temp_drn/android/app/build.gradle \
              "${{ github.workspace }}/flutter_app/android/app/build.gradle"
           # Copy generated resources and manifest (needed for build)
-          cp -rv temp_drn/android/app/src/main/res/* \
-             "${{ github.workspace }}/flutter_app/android/app/src/main/res/" 2>/dev/null || true
+          rm -rf "${{ github.workspace }}/flutter_app/android/app/src/main/res/"
+          cp -rv temp_drn/android/app/src/main/res \
+             "${{ github.workspace }}/flutter_app/android/app/src/main/res"
           # Use generated manifest but add our permissions
           cp -v temp_drn/android/app/src/main/AndroidManifest.xml \
              "${{ github.workspace }}/flutter_app/android/app/src/main/AndroidManifest.xml"
