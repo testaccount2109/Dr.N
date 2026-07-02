@@ -1,0 +1,102 @@
+name: Build iOS IPA (unsigned)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24'
+          channel: 'stable'
+
+      # ── Go Library ──────────────────────────────────────────────
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+
+      - name: Fetch Go dependencies
+        run: cd go/core && go mod tidy
+
+      - name: Build Go library for iOS (xcframework)
+        run: |
+          cd go/core
+          gomobile bind -v -target=ios \
+            -o ../../flutter_app/ios/Runner/drn.xcframework \
+            github.com/b3nni/drn/core/drnbind
+
+      # ── Flutter Project ─────────────────────────────────────────
+      - name: Generate Flutter base project
+        run: |
+          cd /tmp
+          flutter create --org com.drn --project-name drn_app --platforms ios temp_drn
+          # Copy ios/ from generated project (Xcode project, Podfile, etc.)
+          rm -rf ${{ github.workspace }}/flutter_app/ios/
+          cp -r temp_drn/ios ${{ github.workspace }}/flutter_app/ios/
+          cp temp_drn/analysis_options.yaml ${{ github.workspace }}/flutter_app/
+          # Copy our custom dart code
+          cp -r ${{ github.workspace }}/flutter_app/lib/* temp_drn/lib/
+          cp -r temp_drn/lib/* ${{ github.workspace }}/flutter_app/lib/
+
+      - name: Get Flutter packages
+        run: cd flutter_app && flutter pub get
+
+      # Add the xcframework to the Xcode project via Podfile
+      - name: Add drn xcframework to Podfile
+        run: |
+          echo "" >> flutter_app/ios/Podfile
+          echo "target 'Runner' do" >> flutter_app/ios/Podfile
+          echo "  pod 'drn', :path => 'Runner/drn.xcframework'" >> flutter_app/ios/Podfile
+          echo "end" >> flutter_app/ios/Podfile
+
+      # ── Build ───────────────────────────────────────────────────
+      - name: Build iOS (release, no codesign)
+        run: |
+          cd flutter_app
+          flutter build ios --release --no-codesign
+
+      - name: Create unsigned IPA
+        run: |
+          cd flutter_app
+          mkdir -p build/ios/unsigned/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/unsigned/Payload/
+          cd build/ios/unsigned
+          zip -r Dr.N-v1.0.0-unsigned.ipa Payload/
+          mv Dr.N-v1.0.0-unsigned.ipa ../../../
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: "v1.0.0-ios"
+          name: "Dr.N v1.0.0 – iOS (unsigned)"
+          files: Dr.N-v1.0.0-unsigned.ipa
+          generate_release_notes: false
+          make_latest: false
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dr.N-iOS-unsigned-IPA
+          path: Dr.N-v1.0.0-unsigned.ipa
+          if-no-files-found: error

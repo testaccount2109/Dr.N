@@ -1,0 +1,147 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24'
+          channel: 'stable'
+
+      # ── Go Library ──────────────────────────────────────────────
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+
+      - name: Fetch Go dependencies
+        run: cd go/core && go mod tidy
+
+      - name: Build Go library for Android (aar)
+        run: |
+          mkdir -p flutter_app/android/app/libs
+          cd go/core
+          gomobile bind -v -target=android -androidapi 21 \
+            -o ../../flutter_app/android/app/libs/drn.aar \
+            github.com/b3nni/drn/core/drnbind
+
+      # ── Flutter Project ─────────────────────────────────────────
+      - name: Generate Flutter base project
+        run: |
+          cd /tmp
+          flutter create --org com.drn --project-name drn_app --platforms android temp_drn
+          cp -r temp_drn/android/* ${{ github.workspace }}/flutter_app/android/
+          cp -r temp_drn/ios/* ${{ github.workspace }}/flutter_app/ios/
+          cp -r temp_drn/test ${{ github.workspace }}/flutter_app/
+          cp temp_drn/analysis_options.yaml ${{ github.workspace }}/flutter_app/
+          # Copy our custom dart code over the generated main.dart
+          cp -r ${{ github.workspace }}/flutter_app/lib/* temp_drn/lib/
+          cp -r temp_drn/lib/* ${{ github.workspace }}/flutter_app/lib/
+
+      - name: Get Flutter packages
+        run: cd flutter_app && flutter pub get
+
+      # The aar was already placed in android/app/libs/drn.aar
+      - name: Add aar dependency to android/app/build.gradle
+        run: |
+          echo "" >> flutter_app/android/app/build.gradle
+          echo "dependencies {" >> flutter_app/android/app/build.gradle
+          echo "    implementation files('libs/drn.aar')" >> flutter_app/android/app/build.gradle
+          echo "}" >> flutter_app/android/app/build.gradle
+
+      # ── Signing ─────────────────────────────────────────────────
+      - name: Create keystore for signing
+        run: |
+          keytool -genkey -v -keystore release.jks \
+            -alias drn -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass drnpass -keypass drnpass \
+            -dname "CN=Dr.N, OU=Dev, O=B3nni, L=BS, ST=NI, C=DE"
+
+      - name: Create key.properties
+        run: |
+          cat > flutter_app/android/key.properties << EOF
+          storePassword=drnpass
+          keyPassword=drnpass
+          keyAlias=drn
+          storeFile=../release.jks
+          EOF
+
+      - name: Configure signing in build.gradle
+        run: |
+          cat >> flutter_app/android/app/build.gradle << 'SIGNEOF'
+
+          def keystoreProperties = new Properties()
+          def keystorePropertiesFile = rootProject.file('key.properties')
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+              signingConfigs {
+                  release {
+                      keyAlias keystoreProperties['keyAlias']
+                      keyPassword keystoreProperties['keyPassword']
+                      storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                      storePassword keystoreProperties['storePassword']
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          SIGNEOF
+
+      # ── Build ───────────────────────────────────────────────────
+      - name: Build Android APK (release)
+        run: cd flutter_app && flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk \
+             Dr.N-v1.0.0-android.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: "v1.0.0-android"
+          name: "Dr.N v1.0.0 – Android"
+          files: Dr.N-v1.0.0-android.apk
+          generate_release_notes: false
+          make_latest: false
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dr.N-Android-signed-APK
+          path: Dr.N-v1.0.0-android.apk
+          if-no-files-found: error
