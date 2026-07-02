@@ -64,14 +64,6 @@ jobs:
       - name: Get Flutter packages
         run: cd flutter_app && flutter pub get
 
-      # Add the xcframework to the Xcode project via Podfile
-      - name: Add drn xcframework to Podfile
-        run: |
-          echo "" >> flutter_app/ios/Podfile
-          echo "target 'Runner' do" >> flutter_app/ios/Podfile
-          echo "  pod 'drn', :path => 'Runner/drn.xcframework'" >> flutter_app/ios/Podfile
-          echo "end" >> flutter_app/ios/Podfile
-
       # ── Build ───────────────────────────────────────────────────
       - name: Build iOS (release, no codesign)
         run: |
@@ -84,8 +76,8 @@ jobs:
           mkdir -p build/ios/unsigned/Payload
           cp -r build/ios/iphoneos/Runner.app build/ios/unsigned/Payload/
           cd build/ios/unsigned
-          zip -r Dr.N-v1.0.0-unsigned.ipa Payload/
-          mv Dr.N-v1.0.0-unsigned.ipa ../../../
+          zip -r Dr.N.ipa Payload/
+          cp Dr.N.ipa ${GITHUB_WORKSPACE}/Dr.N-v1.0.0-unsigned.ipa
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
