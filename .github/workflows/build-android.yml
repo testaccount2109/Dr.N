@@ -61,10 +61,12 @@ jobs:
         run: |
           cd /tmp
           flutter create --org com.drn --project-name drn_app --platforms android temp_drn
-          # Backup our custom bridge files
+          # Backup our custom bridge files and aar
           mkdir -p /tmp/drn_bridge
           cp -r ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/*.kt \
                 /tmp/drn_bridge/ 2>/dev/null || true
+          cp ${{ github.workspace }}/flutter_app/android/app/libs/drn.aar \
+             /tmp/drn_bridge/drn.aar 2>/dev/null || true
           # Replace android/ with generated version
           rm -rf ${{ github.workspace }}/flutter_app/android/
           cp -r temp_drn/android ${{ github.workspace }}/flutter_app/android
@@ -73,6 +75,10 @@ jobs:
           mkdir -p ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app
           cp /tmp/drn_bridge/*.kt \
              ${{ github.workspace }}/flutter_app/android/app/src/main/kotlin/com/drn/app/ 2>/dev/null || true
+          # Restore the Go library aar (was placed before flutter create)
+          mkdir -p ${{ github.workspace }}/flutter_app/android/app/libs
+          cp /tmp/drn_bridge/drn.aar \
+             ${{ github.workspace }}/flutter_app/android/app/libs/drn.aar 2>/dev/null || true
           # Add aar dependency to generated build.gradle
           cat >> ${{ github.workspace }}/flutter_app/android/app/build.gradle << 'DEOF'
 
