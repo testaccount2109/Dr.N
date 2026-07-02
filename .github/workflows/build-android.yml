@@ -45,7 +45,7 @@ jobs:
         run: |
           cd go/core
           go mod tidy
-          go get -tool golang.org/x/mobile/cmd/gobind
+          go get golang.org/x/mobile@latest
           go mod tidy
 
       - name: Build Go library for Android (aar)
